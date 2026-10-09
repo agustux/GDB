@@ -33,6 +33,7 @@ verify_compatible_distro_version ()
 
 verify_compatible_distro ()
 {
+    DISTRO_SUPPORTED=0
 	for name in "${SUPPORTED_DISTRO_NAMES[@]}"; do
 		if grep -Fiq "$name" <<< "$DISTRO_NAME" ; then
 			DISTRO_SUPPORTED=1
@@ -46,7 +47,7 @@ verify_compatible_distro ()
 
 verify_gnome_environment ()
 {
-	if [ "$DESKTOP_SESSION" = "gnome" ]; then
+	if command -v gnome-shell &>/dev/null; then
 		IS_GNOME=1
 	else
 		IS_GNOME=0
@@ -70,33 +71,33 @@ verify_compatible_distro_version
 verify_compatible_distro
 verify_gnome_environment
 
-if [ IS_SUDOER ]; then
+if [ "$IS_SUDOER" -eq 1 ]; then
 	echo "Confirmed sudoer permissions"
 else
 	echo "Sorry, you'll need sudoer permissions to run this script"
 	exit 1
 fi
 
-if [ DISTRO_SUPPORTED ]; then
- 	echo "Confirmed supported distro: $DISTRO_NAME"
+if [ "$DISTRO_SUPPORTED" -eq 1 ]; then
+	echo "Confirmed supported distro: $DISTRO_NAME"
 else
 	echo "Sorry, you're not running a supported distro; this script won't help you"
 	exit 1
 fi
 
-
-if [ IS_GNOME ]; then
+if [ "$IS_GNOME" -eq 1 ]; then
 	echo "Confirmed GNOME environment"
 else
-	echo "You're not running a GNOME environment. This script can't help you if you're not running GNOME"
+	echo "GNOME not found. This script can't help you without GNOME"
 	exit 1
 fi
 
-if [ DISTRO_NAME="debian-13" ]; then
+if [ "$DISTRO_NAME" = "debian-13" ]; then
 	if [[ $UID -eq 0 ]]; then
 		echo "Confirmed running as root for Debian"
 	else
 		echo "Because you're running debian, you need to run the script as root: 'su -'"
+		exit 1
 	fi
 fi
 
@@ -160,22 +161,25 @@ case "$DISTRO_NAME" in
 		;;
 
 	manjaro)
-		sudo pacman -Rns --noconfirm gnome-contacts gnome-calendar gnome-connections gnome-text-editor gnome-remote-desktop gnome-user-docs \
-		gnome-characters gnome-weather gnome-maps gnome-font-viewer gnome-logs gnome-tour gnome-keyring gnome-chess gnome-layout-switcher \
-		gnome-firmware simple-scan nano nano-syntax-highlighting seahorse yelp malcontent file-roller deja-dup endeavour \
-		fragments kvantum kvantum-manjaro micro quadrapassel thunderbird firefox iagno webapp-manager timeshift timeshift-autosnap-manjaro \
-		manjaro-application-utility pamac-gtk pamac-gnome-integration libpamac-flatpak-plugin manjaro-hello manjaro-settings-manager-notifier \
-		manjaro-settings-manager qt5-base qt5-svg qt5ct qt6-base qt6-svg qt6ct openconnect stoken networkmanager-vpn-plugin-openconnect \
-		networkmanager-openconnect gufw system-config-printer collision gnome-boxes gnome-mines gnome-shell-extension-gtk4-desktop-icons-ng htop
-
+        for pkg in gnome-contacts gnome-calendar gnome-connections gnome-text-editor gnome-remote-desktop gnome-user-docs \
+            gnome-characters gnome-weather gnome-maps gnome-font-viewer gnome-logs gnome-tour gnome-keyring gnome-chess gnome-layout-switcher \
+            gnome-firmware simple-scan nano nano-syntax-highlighting seahorse yelp malcontent file-roller deja-dup endeavour \
+            fragments kvantum kvantum-manjaro micro quadrapassel thunderbird firefox iagno webapp-manager timeshift timeshift-autosnap-manjaro \
+            manjaro-application-utility pamac-gtk pamac-gnome-integration libpamac-flatpak-plugin manjaro-hello manjaro-settings-manager-notifier \
+            manjaro-settings-manager qt5-base qt5-svg qt5ct qt6-base qt6-svg qt6ct openconnect stoken networkmanager-vpn-plugin-openconnect \
+            networkmanager-openconnect gufw system-config-printer collision gnome-boxes gnome-mines gnome-shell-extension-gtk4-desktop-icons-ng htop; do
+        pacman -Qq "$pkg" &>/dev/null && sudo pacman -Rns --noconfirm "$pkg" || true
+        done
 		sudo pacman -Rns $(sudo pacman -Qtdq) --noconfirm || true
 		sudo pacman -Scc --noconfirm || true
 		sudo rm -rf /var/cache/pacman/pkg/*
 		;;
 
 	arch)
-		sudo pacman -Rns --noconfirm gnome-software gnome-calendar gnome-text-editor gnome-maps gnome-contacts gnome-connections gnome-weather \
-		gnome-characters gnome-tour gnome-logs gnome-font-viewer gnome-remote-desktop gnome-user-docs yelp orca brltty epiphany malcontent simple-scan nano htop
+        for pkg in gnome-software gnome-calendar gnome-text-editor gnome-maps gnome-contacts gnome-connections gnome-weather \
+            gnome-characters gnome-tour gnome-logs gnome-font-viewer gnome-remote-desktop gnome-user-docs yelp orca brltty epiphany malcontent simple-scan nano htop; do
+        pacman -Qq "$pkg" &>/dev/null && sudo pacman -Rns --noconfirm "$pkg" || true
+        done
 
 		sudo pacman -Rns $(sudo pacman -Qtdq) --noconfirm || true
 		sudo pacman -Scc --noconfirm || true
@@ -185,9 +189,6 @@ esac
 
 # Removing /var/cache stuff:
 sudo rm -rf /var/cache/*
-
-# Removing clocks from search for speed
-dconf write /org/gnome/desktop/search-providers/disabled "['org.gnome.clocks.desktop']"
 
 echo "Debloating complete, hopefully you'll see some improvement in memory management and little more disk space"
 echo "You may want to restart to avoid any issues for the remainder of this session"
